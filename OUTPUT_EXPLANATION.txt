@@ -1,0 +1,275 @@
+======================================================================
+SHIELD-MATLAB - MEANING OF EACH OUTPUT
+======================================================================
+Author        : Adharsh V
+Date recorded : 10 October 2026
+Software      : MATLAB / MATLAB Online (base MATLAB, no toolboxes)
+
+How to read this file: each section shows the output you see in the
+MATLAB Command Window or Figure, followed by what it means.
+
+Note on time: every simulation uses a time step of 0.1 s, so
+10 samples = 1 second and 1201 samples = 120 seconds.
+
+
+======================================================================
+STEP 1 - SENSOR SIMULATION AND FAULT INJECTION
+(Date: 10 Oct 2026)
+======================================================================
+COMMAND WINDOW OUTPUT
+  Sampling interval: 0.10 seconds
+     -> A sensor reading is created every 0.1 s (10 readings/second).
+
+  Simulation duration: 120.0 seconds
+     -> The experiment lasts 2 minutes.
+
+  Station 2 stuck-sensor interval: 40.0 to 55.0 seconds
+     -> Between 40 s and 55 s, Station 2's sensor freezes on one
+        value, even though the real temperature keeps changing.
+
+  Station 3 lost packets: 51
+     -> 51 readings from Station 3 never arrived (missing data),
+        injected between 70 s and 85 s.
+
+  Total samples per station: 1201
+     -> 120 s / 0.1 s + 1 = 1201 readings per station.
+
+FIGURE: "Industrial Sensor Fault Injection" (3 plots, one per station)
+  - Black dashed line  = true temperature (what is really happening).
+  - Blue line          = measurement the controller receives (noisy).
+  - Red vertical lines = "fault starts" and "fault ends".
+  - Station 2 plot: the blue line goes flat (stuck sensor) during the
+    fault while the true temperature keeps moving.
+  - Station 3 plot: gaps/dropouts in the blue line (lost packets).
+  - Station 1 plot: no fault, normal noisy signal (reference).
+
+WORKSPACE VARIABLES (left panel)
+  faultLabel   - marks where faults were injected (3 x 1201 table).
+  lostPackets / lossIdx - positions of the lost readings (51 values).
+  measurements - what the controller actually receives.
+  sensorNoise  - random noise added to make the sensors realistic.
+  dt, N, t     - time step, number of samples, time axis.
+
+
+======================================================================
+STEP 2 - AUTOMATIC SENSOR FAULT DETECTION
+(Date: 10 Oct 2026)
+======================================================================
+COMMAND WINDOW OUTPUT
+  Station 1: Stuck-sensor flags 0 / Missing-measurement flags 0
+     -> No fault detected. Correct, Station 1 had no fault.
+
+  Station 2: Stuck-sensor flags 142 / Missing-measurement flags 0
+     -> The detector flagged 142 samples as "stuck". The fault lasts
+        about 150 samples (15 s), so it was caught for most of the
+        interval. Flags start after a short delay because the
+        detector needs a window of 10 samples.
+
+  Station 3: Stuck-sensor flags 0 / Missing-measurement flags 51
+     -> 51 missing readings detected. This matches the 51 packets
+        lost in Step 1.
+
+  "Detection simulation completed."
+     -> The script finished without error.
+
+HOW DETECTION WORKS
+  - Stuck sensor: look at the last 10 readings; if the range
+    (max - min) is below 0.03, flag "stuck".
+  - Missing data: a reading that is invalid or not available is
+    flagged "missing".
+
+IMPORTANT NOTE
+  The numbers are DETECTOR FLAGS, not a count of separate faults.
+  Many consecutive flags belong to the same single fault. False
+  alarm and missed-detection rates were not measured.
+
+FIGURE: "Automatic Fault Detection"
+  Shows the signals with detected fault regions highlighted.
+
+
+======================================================================
+STEP 3 - THREE-STATION PRODUCTION LINE
+(Date: 10 Oct 2026)
+======================================================================
+SETUP
+  Station 1 = 4 s per product, Station 2 = 6 s, Station 3 = 5 s.
+  Buffers between stations hold up to 5 items.
+  Each station is switched off once for 30 s:
+     Station 1: 100 - 130 s
+     Station 2: 150 - 180 s
+     Station 3: 200 - 230 s
+
+COMMAND WINDOW OUTPUT
+  Simulation duration: 300.0 seconds
+     -> Total simulated time (5 minutes).
+
+  Products completed: 39
+     -> 39 finished products left Station 3 in 300 s.
+
+  Average throughput: 7.80 products/minute
+     -> 39 products / 5 minutes = 7.8 per minute.
+
+  Station 1 / 2 / 3 downtime: 30.1 seconds each
+     -> Each station was unavailable for about 30 s (the extra 0.1 s
+        comes from counting both end samples of the outage).
+
+FIGURE: "SHIELD Production Line" (3 plots)
+  1. Cumulative Production - total finished products over time.
+     A flat part means production stalled (a station was down).
+  2. Buffer level - items waiting between stations
+     (blue = Buffer 1, orange = Buffer 2, dashed = capacity of 5).
+     Buffer 1 fills up to 5 when Station 2 is slow/down; Buffer 2
+     drains when Station 2 stops feeding it.
+  3. Available - 1 means the station is working, 0 means it is down
+     (the three outage windows are clearly visible).
+
+NOTE
+  These values belong to the standalone production-line test only.
+  Do not confuse them with the final comparison in Step 6.
+
+
+======================================================================
+STEP 4 - NETWORK FAULT SIMULATION
+(Date: 10 Oct 2026)
+======================================================================
+COMMAND WINDOW OUTPUT (per station)
+  Station 1: Packet loss 0.00 %, Mean latency 43.96 ms,
+             High-latency samples 301
+  Station 2: Packet loss 6.74 %, Mean latency 43.79 ms,
+             High-latency samples 301
+  Station 3: Packet loss 10.49 %, Mean latency 43.72 ms,
+             High-latency samples 301
+
+MEANING
+  Packet loss  - percentage of messages that never arrived.
+                 Station 1 is healthy; Station 3 loses the most.
+  Mean latency - average network delay. About 44 ms looks higher
+                 than the normal level (about 20 ms) because it
+                 includes the 30 s high-delay disturbance.
+  High-latency samples - number of readings above the latency
+                 threshold. 301 samples = 30 seconds (the
+                 disturbance from 50 s to 80 s).
+
+  Observation: all three stations show 301 high-latency samples.
+  The latency disturbance hit every station at the same time, so the
+  faults were not isolated per station (a known limitation).
+
+  "Network fault simulation completed."
+     -> The script finished without error.
+
+FIGURE: "Industrial Network Diagnostics" (3 plots)
+  1. Latency (ms) - noisy delay for each station. It jumps above
+     about 100 ms between 50 s and 80 s. The red dashed line is the
+     latency threshold.
+  2. Packet Loss Map - yellow lines mark lost packets.
+     Station 2 loses packets roughly 35 - 65 s;
+     Station 3 loses packets roughly 70 - 95 s.
+  3. High latency - 1 when the delay is above the threshold
+     (50 - 80 s), 0 otherwise.
+
+
+======================================================================
+STEP 5 - ADAPTIVE CONTROLLER
+(Date: 10 Oct 2026)
+======================================================================
+HOW THE CONTROLLER DECIDES (20-sample moving average)
+  NORMAL     - latency and packet loss within normal limits
+  DEGRADED   - above normal limits (latency above 40 ms or packet
+               loss above 5 %) but below stop limits
+  SAFE STOP  - average latency at or above 100 ms or severe packet
+               loss (30 % or more)
+
+COMMAND WINDOW OUTPUT (percentage of time in each mode)
+  Station 1: NORMAL 100.0 %, DEGRADED 0.0 %, SAFE STOP 0.0 %
+     -> Healthy station; never left normal operation.
+  Station 2: NORMAL 74.8 %, DEGRADED 25.0 %, SAFE STOP 0.2 %
+     -> Moderate fault: spent a quarter of the time degraded;
+        briefly touched SAFE STOP (0.2 %, the short spikes in the
+        plot).
+  Station 3: NORMAL 73.9 %, DEGRADED 1.2 %, SAFE STOP 24.9 %
+     -> Severe fault: about a quarter of the time in SAFE STOP.
+
+  "Adaptive controller simulation completed."
+
+FIGURE: "Adaptive Industrial Controller" (one plot per station)
+  - Blue line     = latency in ms (left axis).
+  - Orange line   = controller mode (right axis: NORMAL, DEGRADED,
+                    SAFE STOP).
+  - White dashed  = normal latency reference (40 ms).
+  - Red dashed    = critical latency threshold (100 ms).
+  The orange line steps up when latency rises, then returns to
+  NORMAL once latency recovers.
+
+NOTE
+  These percentages apply to this Step 5 fault schedule (180 s plot)
+  only, not to every simulation.
+
+
+======================================================================
+STEP 6 - INTEGRATED BASELINE vs ADAPTIVE COMPARISON
+(Date: 10 Oct 2026)
+======================================================================
+FAULT SCHEDULE USED
+  Station 2: moderate fault 60 - 110 s (10 % packet loss)
+  Station 3: severe fault 160 - 210 s (40 % packet loss)
+
+COMMAND WINDOW OUTPUT
+  BASELINE CONTROLLER
+    Completed products: 34
+    Throughput: 6.80 products/minute
+    Total station downtime: 100.2 station-seconds
+
+  ADAPTIVE CONTROLLER
+    Completed products: 38
+    Throughput: 7.60 products/minute
+    Total station downtime: 50.2 station-seconds
+
+  Throughput difference: 11.76 %
+     -> ((38 - 34) / 34) x 100 = 11.76 % more products with the
+        adaptive controller.
+
+MEANING OF "STATION-SECONDS"
+  Downtime is added across stations. Two stations down for 1 second
+  at the same time = 2 station-seconds. So it is not simply the
+  elapsed clock time.
+
+DOWNTIME REDUCTION
+  100.2 - 50.2 = 50.0 station-seconds saved
+  (50.0 / 100.2) x 100 = about 49.9 % reduction
+
+FIGURE: "SHIELD-MATLAB: Integrated Factory Simulation"
+  1. Factory Production Comparison - cumulative products over 300 s.
+     Dashed blue = baseline, solid orange = adaptive. The adaptive
+     line finishes higher (38 vs 34).
+  2. Adaptive Controller Response - mode over time.
+     Blue = Station 2 (DEGRADED around 60 - 110 s).
+     Orange = Station 3 (SAFE STOP around 160 - 210 s).
+
+HOW TO INTERPRET THE RESULT
+  The adaptive controller completed more products with less
+  downtime in this run. BUT:
+   - It is a single run (no statistical proof).
+   - The baseline uses instantaneous latency only, while the
+     adaptive controller uses moving averages AND packet loss, so
+     the rules are not identical.
+   - The model is simplified and not validated on real equipment.
+  Treat the result as promising evidence inside the simulation, not
+  proof of the same gain in a real factory.
+
+
+======================================================================
+QUICK GLOSSARY
+======================================================================
+Latency          Delay for a message to travel over the network (ms).
+Packet loss      Messages that never arrive (%).
+Stuck sensor     Sensor output frozen at one value.
+Throughput       Products completed per minute.
+Buffer           Small waiting area between two stations.
+Station-seconds  Downtime summed across all stations.
+Moving window    Average over the most recent N samples.
+rng(7)           Fixed random seed so results can be repeated.
+NORMAL / DEGRADED / SAFE STOP   The three controller modes.
+
+======================================================================
+End of output explanation
+======================================================================
